@@ -1,0 +1,5 @@
+--memcheck:leak-check=full
+--memcheck:show-leak-kinds=all
+--memcheck:track-origins=yes
+--memcheck:errors-for-leak-kinds=all
+--memcheck:error-exitcode=1
