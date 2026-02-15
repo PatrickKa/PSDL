@@ -1,0 +1,4 @@
+add_library(doctest_doctestWithMain INTERFACE)
+add_library(doctest::doctestWithMain ALIAS doctest_doctestWithMain)
+target_compile_definitions(doctest_doctestWithMain INTERFACE DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN)
+target_link_libraries(doctest_doctestWithMain INTERFACE doctest::doctest)

@@ -6,8 +6,7 @@ file(READ "${CMAKE_SOURCE_DIR}/.valgrindrc" VALGRIND_OPTIONS)
 string(STRIP "${VALGRIND_OPTIONS}" VALGRIND_OPTIONS)
 string(REPLACE "\n" " " VALGRIND_OPTIONS "${VALGRIND_OPTIONS}")
 string(
-    REPLACE
-    "--memcheck:suppressions="
+    REPLACE "--memcheck:suppressions="
     "--memcheck:suppressions=${CMAKE_SOURCE_DIR}/"
     VALGRIND_OPTIONS
     "${VALGRIND_OPTIONS}"

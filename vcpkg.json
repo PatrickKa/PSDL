@@ -1,0 +1,24 @@
+{
+  "name": "cerial",
+  "version-semver": "0.0.0",
+  "description": "A C++ serialization library",
+  "homepage": "https://github.com/PatrickKa/Cerial",
+  "dependencies": [],
+  "features": {
+    "test": {
+      "description": "Dependencies for testing",
+      "dependencies": [
+        {
+          "name": "doctest",
+          "version>=": "2.4.11"
+        }
+      ]
+    }
+  },
+  "vcpkg-configuration": {
+    "default-registry": {
+      "kind": "builtin",
+      "baseline": "66c0373dc7fca549e5803087b9487edfe3aca0a1"
+    }
+  }
+}

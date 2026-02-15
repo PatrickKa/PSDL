@@ -1,0 +1,316 @@
+{
+  "version": 6,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 25,
+    "patch": 0
+  },
+  "include": [
+    "CMakePresets.json"
+  ],
+  "configurePresets": [
+    {
+      "name": "dev-linux-gcc",
+      "inherits": [
+        "common-linux",
+        "clang-tidy",
+        "cppcheck"
+      ],
+      "cacheVariables": {
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
+        "CMAKE_CXX_COMPILER": "g++",
+        "CMAKE_VERIFY_INTERFACE_HEADER_SETS": "ON"
+      }
+    },
+    {
+      "name": "dev-linux-clang",
+      "inherits": [
+        "dev-linux-gcc"
+      ],
+      "cacheVariables": {
+        "CMAKE_CXX_COMPILER": "clang++"
+      }
+    },
+    {
+      "name": "dev-linux-sanitize",
+      "inherits": [
+        "sanitize",
+        "common-linux"
+      ],
+      "cacheVariables": {
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
+      }
+    },
+    {
+      "name": "dev-linux-coverage",
+      "inherits": [
+        "coverage",
+        "common-linux"
+      ],
+      "cacheVariables": {
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
+      }
+    },
+    {
+      "name": "dev-windows-msvc",
+      "description": "Requires toolchain from MarkSchofield/WindowsToolchain",
+      "inherits": [
+        "common-windows",
+        "flags-msvc",
+        "clang-tidy-msvc",
+        "cppcheck"
+      ],
+      "generator": "Ninja Multi-Config",
+      "cacheVariables": {
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
+        "VCPKG_CHAINLOAD_TOOLCHAIN_FILE": "$env{WINDOWS_TOOLCHAIN_ROOT}/Windows.MSVC.toolchain.cmake",
+        "VCPKG_HOST_TRIPLET": "x64-windows-static-md",
+        "VCPKG_TARGET_TRIPLET": "x64-windows-static-md"
+      }
+    },
+    {
+      "name": "dev-windows-clang-cl",
+      "description": "Requires toolchain from MarkSchofield/WindowsToolchain and triplet from Neumann-A/my-vcpkg-triplets",
+      "inherits": [
+        "flags-clang-cl",
+        "dev-windows-msvc"
+      ],
+      "cacheVariables": {
+        "CMAKE_C_COMPILER_FRONTEND_VARIANT": "MSVC",
+        "CMAKE_CXX_COMPILER_FRONTEND_VARIANT": "MSVC",
+        "VCPKG_CHAINLOAD_TOOLCHAIN_FILE": "$env{WINDOWS_TOOLCHAIN_ROOT}/Windows.Clang.toolchain.cmake",
+        "VCPKG_HOST_TRIPLET": "x64-win-llvm-static-md",
+        "VCPKG_TARGET_TRIPLET": "x64-win-llvm-static-md"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "dev-linux-gcc-debug",
+      "configurePreset": "dev-linux-gcc",
+      "configuration": "Debug"
+    },
+    {
+      "name": "dev-linux-gcc-release",
+      "configurePreset": "dev-linux-gcc",
+      "configuration": "Release"
+    },
+    {
+      "name": "dev-linux-clang-debug",
+      "configurePreset": "dev-linux-clang",
+      "configuration": "Debug"
+    },
+    {
+      "name": "dev-linux-clang-release",
+      "configurePreset": "dev-linux-clang",
+      "configuration": "Release"
+    },
+    {
+      "name": "dev-linux-coverage",
+      "configurePreset": "dev-linux-coverage"
+    },
+    {
+      "name": "dev-linux-coverage-reports",
+      "configurePreset": "dev-linux-coverage",
+      "targets": [
+        "coverage"
+      ]
+    },
+    {
+      "name": "dev-linux-sanitize",
+      "configurePreset": "dev-linux-sanitize"
+    },
+    {
+      "name": "dev-windows-msvc-debug",
+      "configurePreset": "dev-windows-msvc",
+      "configuration": "Debug"
+    },
+    {
+      "name": "dev-windows-msvc-release",
+      "configurePreset": "dev-windows-msvc",
+      "configuration": "Release"
+    },
+    {
+      "name": "dev-windows-clang-cl-debug",
+      "configurePreset": "dev-windows-clang-cl",
+      "configuration": "Debug"
+    },
+    {
+      "name": "dev-windows-clang-cl-release",
+      "configurePreset": "dev-windows-clang-cl",
+      "configuration": "Release"
+    }
+  ],
+  "testPresets": [
+    {
+      "name": "dev-linux-gcc",
+      "configurePreset": "dev-linux-gcc"
+    },
+    {
+      "name": "dev-linux-clang",
+      "configurePreset": "dev-linux-clang"
+    },
+    {
+      "name": "dev-linux-coverage",
+      "configurePreset": "dev-linux-coverage"
+    },
+    {
+      "name": "dev-linux-sanitize",
+      "configurePreset": "dev-linux-sanitize"
+    },
+    {
+      "name": "dev-windows-msvc",
+      "configurePreset": "dev-windows-msvc"
+    },
+    {
+      "name": "dev-windows-clang-cl",
+      "configurePreset": "dev-windows-clang-cl"
+    }
+  ],
+  "workflowPresets": [
+    {
+      "name": "dev-linux-gcc",
+      "description": "Configure, build, and test debug and release configuration on Linux with GCC",
+      "steps": [
+        {
+          "type": "configure",
+          "name": "dev-linux-gcc"
+        },
+        {
+          "type": "build",
+          "name": "dev-linux-gcc-debug"
+        },
+        {
+          "type": "test",
+          "name": "dev-linux-gcc"
+        },
+        {
+          "type": "build",
+          "name": "dev-linux-gcc-release"
+        },
+        {
+          "type": "test",
+          "name": "dev-linux-gcc"
+        }
+      ]
+    },
+    {
+      "name": "dev-linux-clang",
+      "description": "Configure, build, and test debug and release configuration on Linux with Clang",
+      "steps": [
+        {
+          "type": "configure",
+          "name": "dev-linux-clang"
+        },
+        {
+          "type": "build",
+          "name": "dev-linux-clang-debug"
+        },
+        {
+          "type": "test",
+          "name": "dev-linux-clang"
+        },
+        {
+          "type": "build",
+          "name": "dev-linux-clang-release"
+        },
+        {
+          "type": "test",
+          "name": "dev-linux-clang"
+        }
+      ]
+    },
+    {
+      "name": "dev-linux-coverage",
+      "description": "Generate coverage reports on Linux",
+      "steps": [
+        {
+          "type": "configure",
+          "name": "dev-linux-coverage"
+        },
+        {
+          "type": "build",
+          "name": "dev-linux-coverage"
+        },
+        {
+          "type": "test",
+          "name": "dev-linux-coverage"
+        },
+        {
+          "type": "build",
+          "name": "dev-linux-coverage-reports"
+        }
+      ]
+    },
+    {
+      "name": "dev-linux-sanitize",
+      "description": "Run sanitizers on Linux",
+      "steps": [
+        {
+          "type": "configure",
+          "name": "dev-linux-sanitize"
+        },
+        {
+          "type": "build",
+          "name": "dev-linux-sanitize"
+        },
+        {
+          "type": "test",
+          "name": "dev-linux-sanitize"
+        }
+      ]
+    },
+    {
+      "name": "dev-windows-msvc",
+      "description": "Configure, build, and test debug and release configuration on Windows with MSVC",
+      "steps": [
+        {
+          "type": "configure",
+          "name": "dev-windows-msvc"
+        },
+        {
+          "type": "build",
+          "name": "dev-windows-msvc-debug"
+        },
+        {
+          "type": "test",
+          "name": "dev-windows-msvc"
+        },
+        {
+          "type": "build",
+          "name": "dev-windows-msvc-release"
+        },
+        {
+          "type": "test",
+          "name": "dev-windows-msvc"
+        }
+      ]
+    },
+    {
+      "name": "dev-windows-clang-cl",
+      "description": "Configure, build, and test debug and release configuration on Windows with clang-cl",
+      "steps": [
+        {
+          "type": "configure",
+          "name": "dev-windows-clang-cl"
+        },
+        {
+          "type": "build",
+          "name": "dev-windows-clang-cl-debug"
+        },
+        {
+          "type": "test",
+          "name": "dev-windows-clang-cl"
+        },
+        {
+          "type": "build",
+          "name": "dev-windows-clang-cl-release"
+        },
+        {
+          "type": "test",
+          "name": "dev-windows-clang-cl"
+        }
+      ]
+    }
+  ]
+}
