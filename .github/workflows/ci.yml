@@ -1,0 +1,229 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+env:
+  LLVM_MAJOR_VERSION: '20'
+  VCPKG_COMMITTISH: 66c0373dc7fca549e5803087b9487edfe3aca0a1  # 2026.01.16
+
+jobs:
+  check-formatting-and-spelling:
+    runs-on: ubuntu-24.04
+    # The env context cannot be used in the matrix definition of the build-and-test job, so we
+    # pass it via an output of this job
+    outputs:
+      LLVM_MAJOR_VERSION: ${{ env.LLVM_MAJOR_VERSION}}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Set up tools
+        run: |
+          sudo apt update -q
+          sudo apt install -y clang-format-${{ env.LLVM_MAJOR_VERSION}}
+          pipx install gersemi codespell
+          sudo update-alternatives --install /usr/bin/clang-format clang-format /usr/bin/clang-format-${{ env.LLVM_MAJOR_VERSION}} 9999
+
+      - name: Print versions
+        run: |
+          python --version
+          pipx --version
+          cmake --version
+          clang-format --version
+          clang-format-${{ env.LLVM_MAJOR_VERSION }} --version
+          gersemi --version
+          codespell --version
+
+      - name: Check code formatting
+        run: cmake -P Infrastructure/CMake/Format.cmake
+
+      - name: Check spelling
+        run: cmake -P Infrastructure/CMake/Spell.cmake
+
+  build-and-test:
+    needs: check-formatting-and-spelling
+    strategy:
+      fail-fast: false
+      matrix:
+        # Keeping only the `include:` part below would be sufficient to generate the same matrix
+        # combinations, but then the job names would contain all the variables, making them very
+        # long. Having just the compiler is much nicer.
+        compiler:
+          - MSVC
+          - clang-cl
+          - GCC
+          - Clang
+        include:
+          - compiler: MSVC
+            preset: ci-windows-msvc
+            compiler-pascal-case: Msvc
+            os: windows-2025
+          - compiler: clang-cl
+            compiler-setup-cpp: llvm-${{ needs.check-formatting-and-spelling.outputs.LLVM_MAJOR_VERSION }}
+            preset: ci-windows-clang-cl
+            compiler-pascal-case: ClangCl
+            os: windows-2025
+          - compiler: GCC
+            compiler-setup-cpp: gcc-14
+            preset: "ci-ubuntu"
+            compiler-pascal-case: Gcc
+            os: ubuntu-24.04
+          - compiler: Clang
+            compiler-setup-cpp: llvm-${{ needs.check-formatting-and-spelling.outputs.LLVM_MAJOR_VERSION }}
+            preset: "ci-ubuntu"
+            compiler-pascal-case: Clang
+            os: ubuntu-24.04
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Set up C++ compiler and tools
+        if: ${{ matrix.compiler != 'MSVC' }}
+        uses: aminya/setup-cpp@v1
+        with:
+          compiler: ${{ matrix.compiler-setup-cpp }}
+          vcvarsall: ${{ matrix.compiler == 'clang-cl' }}
+          # The explicit "false" is needed, because otherwise it would be an empty string on Windows
+          clang-tidy: ${{ runner.os == 'Linux' && env.LLVM_MAJOR_VERSION || false }}
+          cppcheck: ${{ runner.os == 'Linux' }}
+          gcovr: ${{ runner.os == 'Linux' }}
+
+      - name: Ensure libstdc++ from at least GCC 14 is used
+        if: ${{ runner.os == 'Linux' }}
+        # __GLIBCXX__ is only defined for libstdc++, __cpp_lib_print only since GCC 14
+        run: |
+          echo "#include <version>" | clang++ -std=c++23 -xc++ -dM -E - | grep "#define __GLIBCXX__ "
+          echo "#include <version>" | clang++ -std=c++23 -xc++ -dM -E - | grep "#define __cpp_lib_print "
+
+      - name: Install valgrind
+        if: ${{ runner.os == 'Linux' }}
+        run: |
+          sudo apt update -q
+          sudo apt install -y valgrind
+
+      - name: Print versions
+        shell: bash
+        run: |
+          cl || true
+          clang-cl --version || true
+          g++ --version || true
+          clang++ --version || true
+          cmake --version || true
+          ninja --version || true
+          clang-tidy --version || true
+          cppcheck --version || true
+          gcovr --version || true
+          gcov --version || true
+          llvm-cov --version || true
+          valgrind --version || true
+
+      - name: Set up vcpkg
+        uses: fantana21/set-up-vcpkg@v1
+        with:
+          committish: ${{ env.VCPKG_COMMITTISH }}
+          cache-key: vcpkg-${{ matrix.os }}-${{ matrix.compiler }}-${{ env.VCPKG_COMMITTISH }}-${{ hashFiles('vcpkg.json', 'CMakePresets.json') }}-${{ github.sha }}
+          cache-restore-keys: |
+            vcpkg-${{ matrix.os }}-${{ matrix.compiler }}-${{ env.VCPKG_COMMITTISH }}-${{ hashFiles('vcpkg.json', 'CMakePresets.json') }}
+            vcpkg-${{ matrix.os }}-${{ matrix.compiler }}-${{ env.VCPKG_COMMITTISH }}
+          save-always: true
+          use-private-registry: true
+          private-registry-pat: ${{ secrets.VCPKG_REGISTRY_PAT }}
+
+      # Without the triplet vcpkg would not use clang-cl (it does not respect CMAKE_CXX_COMPILER).
+      # Without explicitly setting LLVMInstallDir vcpkg might use the wrong clang-cl.
+      - name: Set up triplets and LLVMInstallDir for clang-cl
+        if: ${{ matrix.compiler == 'clang-cl' }}
+        run: |
+          git clone https://github.com/Neumann-A/my-vcpkg-triplets.git
+          cd my-vcpkg-triplets
+          git checkout e5f3f2d06430fa475feccbb34a5d61023807b854
+          "VCPKG_OVERLAY_TRIPLETS=${{ github.workspace }}/my-vcpkg-triplets" >> $env:GITHUB_ENV
+          $LLVMInstallDir = (Get-Command clang-cl).Source | Split-Path | Split-Path
+          "LLVMInstallDir=$LLVMInstallDir" >> $env:GITHUB_ENV
+
+      - name: Pre-seed credentials for private repos
+        if: ${{ runner.os == 'Windows' }}
+        run: |
+          "url=https://github.com`nusername=AllRepositories`npassword=${{ secrets.ALL_REPOSITORIES_PAT }}`n" | git credential approve
+
+      - name: Set up credential helper for private repos
+        if: ${{ runner.os == 'Linux' }}
+        run: |
+          git config --global credential.https://github.com/fantana21.helper '!f() { echo username=AllRepositories; echo password=${{ secrets.ALL_REPOSITORIES_PAT }}; }; f'
+
+      - name: Improve parallelism of MSBuild
+        if: ${{ matrix.compiler == 'MSVC' }}
+        run: |
+          Add-Content "$env:GITHUB_ENV" 'UseMultiToolTask=true'
+          Add-Content "$env:GITHUB_ENV" 'EnforceProcessCountAcrossBuilds=true'
+
+      - name: Build and test debug and release mode
+        shell: bash
+        id: test
+        run: |
+          cmake --preset ${{ matrix.preset }}
+          cmake --build --preset ${{ matrix.preset }}-debug | tee ${{ matrix.compiler }}_Debug_build.log
+          ctest --preset ${{ matrix.preset }}
+          cmake --build --preset ${{ matrix.preset }}-release | tee ${{ matrix.compiler }}_Release_build.log
+          ctest --preset ${{ matrix.preset }}
+
+      - name: Upload build logs as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: BuildLogs${{ matrix.compiler-pascal-case }}
+          path: |
+            ${{ matrix.compiler }}_Debug_build.log
+            ${{ matrix.compiler }}_Release_build.log
+
+      - name: Build, test, and generate coverage reports
+        if: ${{ runner.os == 'Linux' }}
+        id: coverage
+        run: cmake --workflow --preset ci-coverage
+
+      - name: Build and test with sanitizers
+        if: ${{ runner.os == 'Linux' && !cancelled() && steps.test.conclusion == 'success' }}
+        id: sanitize
+        run: cmake --workflow --preset ci-sanitize
+
+      - name: Build and test debug and release mode with Valgrind
+        # Running tests with Valgrind is slow, so we only do it if running them with sanitizers
+        # succeeded
+        if: ${{ runner.os == 'Linux' && !cancelled() && steps.sanitize.conclusion == 'success' }}
+        run: cmake --workflow --preset ci-valgrind
+
+      - name: Report coverage results as artifact and PR comment
+        if: ${{ runner.os == 'Linux' && !cancelled() && steps.coverage.conclusion == 'success' }}
+        uses: fantana21/report-coverage@v1
+        with:
+          add-job-summary: false
+          artifact-name: CoverageReport${{ matrix.compiler-pascal-case }}
+          pr-comment-header: ${{ matrix.compiler }} coverage report
+
+  report-warnings:
+    needs: build-and-test
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Download all build log artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: BuildLogs*
+          merge-multiple: true
+          path: ./BuildLogs
+
+      - name: List all build logs
+        run: ls -lR ./BuildLogs
+
+      - name: Count and report warnings as job summary and PR comment
+        uses: fantana21/report-warnings@v1
+        with:
+          build-logs: ./BuildLogs/*.log
+          pr-comment-header: warnings report
