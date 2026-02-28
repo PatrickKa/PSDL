@@ -9,8 +9,8 @@
       "description": "Dependencies for testing",
       "dependencies": [
         {
-          "name": "doctest",
-          "version>=": "2.4.11"
+          "name": "catch2",
+          "version>=": "3.12.0"
         }
       ]
     }

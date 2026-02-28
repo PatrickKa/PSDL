@@ -22,8 +22,6 @@
 # - avoid-c-arrays: C arrays are fine if used only locally.
 # - bugprone-implicit-widening-of-multiplication-result: I am not sure anymore but I think this is
 #   too noisy.
-# - clang-analyzer-cplusplus.NewDeleteLeaks: I don't know how to silence potential false positives
-#   that it found in doctest.h, so I disable it completely. Also, we have Valgrind anyway.
 # - clang-diagnostic-unused-command-line-argument: I don't remember why I disabled this, but it
 #   doesn't sound like an important check.
 # - google-readability-todo: We don't require names and/or bug numbers in TODO comments.
@@ -59,7 +57,6 @@ Checks: "*,\
   -openmp-*,\
   -*avoid-c-arrays,\
   -bugprone-implicit-widening-of-multiplication-result,\
-  -clang-analyzer-cplusplus.NewDeleteLeaks,\
   -clang-diagnostic-unused-command-line-argument,\
   fuchsia-multiple-inheritance,\
   fuchsia-virtual-inheritance,\

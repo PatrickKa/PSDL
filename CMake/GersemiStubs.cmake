@@ -1,2 +1,2 @@
-function(doctest_discover_tests TARGET)
+function(catch_discover_tests TARGET)
 endfunction()
