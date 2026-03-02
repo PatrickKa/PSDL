@@ -1,7 +1,14 @@
 #pragma once
 
+#include <Cerial/Byte.hpp>
+
 #include <array>
+#include <bit>
+#include <concepts>
 #include <cstddef>
+#include <cstdint>
+#include <cstring>
+#include <span>
 #include <type_traits>
 
 
@@ -13,6 +20,9 @@ template<typename T>
 concept TriviallySerializable = std::is_arithmetic_v<T> || std::is_enum_v<T>;
 
 template<typename T>
+concept ByteOrderSensitive = (std::is_arithmetic_v<T> || std::is_enum_v<T>) && sizeof(T) > 1;
+
+template<typename T>
 inline constexpr auto isStdArray = false;
 
 template<typename T, std::size_t size>
@@ -22,7 +32,7 @@ template<typename T>
 concept StdArray = isStdArray<T>;
 
 
-// --- Function declarations ---
+// --- Function declarations and type aliases ---
 
 // Must be specialized for user-defined types. The primary template is intentionally left undefined,
 // so that the compiler will throw an error if the specialization is missing.
@@ -34,6 +44,38 @@ constexpr auto SerialSize() -> std::size_t;
 
 template<StdArray T>
 constexpr auto SerialSize() -> std::size_t;
+
+
+template<typename T>
+using Buffer = std::array<Byte, SerialSize<T>()>;
+
+template<typename T>
+using BufferView = std::span<Byte const, SerialSize<T>()>;
+
+
+template<std::endian endianness, typename T>
+[[nodiscard]] auto Serialize(T const & t) -> Buffer<T>;
+
+template<std::endian endianness, std::default_initializable T>
+[[nodiscard]] auto Deserialize(BufferView<T> bufferView) -> T;
+
+// Must be overloaded for user-defined types to be serializable
+template<std::endian endianness, TriviallySerializable T>
+auto Serialize(T t, std::span<Byte> destination) -> std::span<Byte>;
+
+// Must be overloaded for user-defined types to be deserializable
+template<std::endian endianness, TriviallySerializable T>
+auto Deserialize(T * t, std::span<Byte const> source) -> std::span<Byte const>;
+
+template<std::endian endianness, StdArray T>
+auto Serialize(T const & array, std::span<Byte> destination) -> std::span<Byte>;
+
+template<std::endian endianness, StdArray T>
+auto Deserialize(T * array, std::span<Byte const> source) -> std::span<Byte const>;
+
+
+template<ByteOrderSensitive T>
+constexpr auto ReverseBytes(T t) -> T;
 
 
 // --- Function definitions ---
@@ -52,6 +94,93 @@ constexpr auto SerialSize() -> std::size_t
 }
 
 
+template<std::endian endianness, typename T>
+[[nodiscard]] auto Serialize(T const & t) -> Buffer<T>
+{
+    auto buffer = Buffer<T>{};
+    Serialize<endianness>(t, std::span(buffer));
+    return buffer;
+}
+
+
+template<std::endian endianness, std::default_initializable T>
+[[nodiscard]] auto Deserialize(BufferView<T> bufferView) -> T
+{
+    auto t = T{};
+    Deserialize<endianness>(&t, bufferView);
+    return t;
+}
+
+
+template<std::endian endianness, TriviallySerializable T>
+auto Serialize(T t, std::span<Byte> destination) -> std::span<Byte>
+{
+    if constexpr(ByteOrderSensitive<T> && endianness != std::endian::native)
+    {
+        t = ReverseBytes(t);
+    }
+    std::memcpy(destination.data(), &t, SerialSize<T>());
+    return destination.subspan(SerialSize<T>());
+}
+
+
+template<std::endian endianness, TriviallySerializable T>
+auto Deserialize(T * t, std::span<Byte const> source) -> std::span<Byte const>
+{
+    std::memcpy(t, source.data(), SerialSize<T>());
+    if constexpr(ByteOrderSensitive<T> && endianness != std::endian::native)
+    {
+        *t = ReverseBytes(*t);
+    }
+    return source.subspan(SerialSize<T>());
+}
+
+
+template<std::endian endianness, StdArray T>
+auto Serialize(T const & array, std::span<Byte> destination) -> std::span<Byte>
+{
+    for(auto && element : array)
+    {
+        destination = Serialize<endianness>(element, destination);
+    }
+    return destination;
+}
+
+
+template<std::endian endianness, StdArray T>
+auto Deserialize(T * array, std::span<Byte const> source) -> std::span<Byte const>
+{
+    for(auto && element : *array)
+    {
+        source = Deserialize<endianness>(&element, source);
+    }
+    return source;
+}
+
+
+template<ByteOrderSensitive T>
+constexpr auto ReverseBytes(T t) -> T
+{
+    if constexpr(std::integral<T>)
+    {
+        return std::byteswap(t);
+    }
+    else if constexpr(std::is_enum_v<T>)
+    {
+        return static_cast<T>(std::byteswap(std::to_underlying(t)));
+    }
+    else if constexpr(std::floating_point<T>)
+    {
+        using UnsignedInt = std::conditional_t<sizeof(T) == 4, std::uint32_t, std::uint64_t>;
+        return std::bit_cast<T>(std::byteswap(std::bit_cast<UnsignedInt>(t)));
+    }
+    else
+    {
+        static_assert(false);
+    }
+}
+
+
 // --- Compile time checks ---
 
 static_assert(TriviallySerializable<bool>);
@@ -61,6 +190,14 @@ static_assert(TriviallySerializable<unsigned long long>);
 static_assert(TriviallySerializable<float>);
 static_assert(TriviallySerializable<double>);
 static_assert(!TriviallySerializable<void *>);
+
+static_assert(!ByteOrderSensitive<bool>);
+static_assert(!ByteOrderSensitive<char>);
+static_assert(ByteOrderSensitive<int>);
+static_assert(ByteOrderSensitive<unsigned long long>);
+static_assert(ByteOrderSensitive<float>);
+static_assert(ByteOrderSensitive<double>);
+static_assert(!ByteOrderSensitive<void *>);
 
 static_assert(SerialSize<bool>() == 1);
 static_assert(SerialSize<char>() == 1);

@@ -5,6 +5,10 @@ include(Catch)
 
 # --- Tests ---
 
+add_and_set_up_test(CerialTests_Cerial)
+target_link_libraries(CerialTests_Cerial PRIVATE Cerial::Cerial Catch2::Catch2WithMain)
+catch_discover_tests(CerialTests_Cerial)
+
 add_and_set_up_test(CerialTests_Dummy)
 target_link_libraries(CerialTests_Dummy PRIVATE Catch2::Catch2WithMain)
 catch_discover_tests(CerialTests_Dummy)
